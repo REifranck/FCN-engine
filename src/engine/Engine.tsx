@@ -135,24 +135,32 @@ export default function Engine() {
 
       {/* Start menu */}
       {state.status === "menu" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-gradient-to-b from-black via-fuchsia-950/30 to-black p-6">
-          <div className="text-center">
-            <div className="text-xs uppercase tracking-[0.4em] text-cyan-400/70">FCN Next Engine</div>
-            <h1 className="mt-2 bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-5xl font-black tracking-tight text-transparent sm:text-7xl">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 overflow-y-auto p-6">
+          <img src={knightBg} alt="Shining armor knight" className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/90" />
+          <div className="relative text-center">
+            <div className="text-xs uppercase tracking-[0.4em] text-amber-300/80 drop-shadow-lg">FCN Next Engine</div>
+            <h1 className="mt-2 bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-300 bg-clip-text text-5xl font-black tracking-tight text-transparent drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] sm:text-7xl">
               ULTRA ENGINE X ONE
             </h1>
-            <p className="mt-3 text-sm text-cyan-200/60">Choose a procedural game world</p>
+            <p className="mt-3 text-sm text-amber-100/80 drop-shadow">Play a world, or build your own</p>
           </div>
-          <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
+          <button
+            onClick={() => { SFX.click(); setShowCreator(true); }}
+            className="relative rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 px-8 py-4 text-lg font-black uppercase tracking-widest text-black shadow-[0_0_40px_rgba(252,211,77,0.6)] transition hover:scale-105 hover:shadow-[0_0_60px_rgba(252,211,77,0.9)]"
+          >
+            🎨 Create Your Own Game
+          </button>
+          <div className="relative grid w-full max-w-3xl gap-4 sm:grid-cols-2">
             {GAME_REGISTRY.map((g) => (
               <button
                 key={g.id}
                 onClick={() => dispatch({ type: "select", id: g.id })}
-                className="group rounded-xl border border-cyan-500/30 bg-black/60 p-5 text-left backdrop-blur-sm transition hover:border-fuchsia-400/60 hover:bg-fuchsia-950/30"
+                className="group rounded-xl border border-amber-400/40 bg-black/60 p-5 text-left backdrop-blur-sm transition hover:border-amber-300 hover:bg-amber-900/30"
               >
-                <div className="text-lg font-bold text-cyan-100">{g.name}</div>
-                <div className="mt-1 text-xs text-cyan-300/60">{g.tagline}</div>
-                <div className="mt-4 text-xs font-bold uppercase tracking-widest text-fuchsia-300 group-hover:text-fuchsia-200">
+                <div className="text-lg font-bold text-amber-100">{g.name}</div>
+                <div className="mt-1 text-xs text-amber-200/70">{g.tagline}</div>
+                <div className="mt-4 text-xs font-bold uppercase tracking-widest text-amber-300 group-hover:text-amber-200">
                   ▶ Boot Engine
                 </div>
               </button>
