@@ -41,9 +41,12 @@ function reducer(s: GameState, a: Action): GameState {
 
 export default function Engine() {
   const [state, dispatch] = useReducer(reducer, initial);
+  const [showCreator, setShowCreator] = useState(false);
   const entitiesRef = useRef<Entity[]>([]);
   const hitCooldown = useRef(0);
   const config = getConfig(state.configId);
+
+  if (showCreator) return <Creator onExit={() => setShowCreator(false)} />;
 
   // Clear entities on (re)start
   useEffect(() => {
