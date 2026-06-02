@@ -1,9 +1,12 @@
 import { Canvas } from "@react-three/fiber";
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import * as THREE from "three";
 import { GAME_REGISTRY, getConfig } from "../core/registry";
 import type { Entity, GameState } from "../core/types";
 import { Scene } from "./Scene";
+import Creator from "./Creator";
+import { SFX } from "./audio";
+import knightBg from "../assets/knight-hero.jpg";
 
 type Action =
   | { type: "select"; id: string }
