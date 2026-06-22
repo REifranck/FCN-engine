@@ -146,7 +146,7 @@ export default function Engine() {
             <p className="mt-3 text-sm text-amber-100/80 drop-shadow">Play a world, or build your own</p>
           </div>
           <button
-            onClick={() => { SFX.click(); setShowCreator(true); }}
+            onClick={() => { setShowCreator(true); window.setTimeout(() => SFX.click(), 0); }}
             className="relative rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 px-8 py-4 text-lg font-black uppercase tracking-widest text-black shadow-[0_0_40px_rgba(252,211,77,0.6)] transition hover:scale-105 hover:shadow-[0_0_60px_rgba(252,211,77,0.9)]"
           >
             🎨 Create Your Own Game
