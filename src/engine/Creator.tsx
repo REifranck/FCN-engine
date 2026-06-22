@@ -15,6 +15,7 @@ type Mode = "template" | "edit" | "play";
 type ToolId = "select" | "track" | "terrain" | "asset" | "npc" | "quest" | "combat" | "lighting" | "weather" | "ai" | "timeline" | "console";
 type PaintCell = { row: number; lane: -1 | 0 | 1; brush: TerrainBrush; height: number };
 type LogLevel = "ok" | "warn" | "error";
+type LogEntry = { level: LogLevel; text: string };
 
 interface Placed {
   id: string;
@@ -191,7 +192,7 @@ export default function Creator({ onExit }: { onExit: () => void }) {
   const [mode, setMode] = useState<Mode>("template");
   const [music, setMusic] = useState(false);
   const [status, setStatus] = useState<"booting" | "ready" | "recovering">("booting");
-  const [logs, setLogs] = useState<{ level: LogLevel; text: string }[]>([{ level: "ok", text: "Kernel visual carregado" }, { level: "ok", text: "Cache de projeto pronto" }]);
+  const [logs, setLogs] = useState<LogEntry[]>([{ level: "ok", text: "Kernel visual carregado" }, { level: "ok", text: "Cache de projeto pronto" }]);
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [playerLane, setPlayerLane] = useState(0);
@@ -205,11 +206,11 @@ export default function Creator({ onExit }: { onExit: () => void }) {
 
   useEffect(() => { const id = window.setTimeout(() => setStatus("ready"), 650); return () => window.clearTimeout(id); }, []);
   useEffect(() => { if (music) startMusic(); else stopMusic(); return () => stopMusic(); }, [music]);
-  useEffect(() => { const id = window.setTimeout(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(project)); setLogs((l) => [{ level: "ok", text: `Autosave ${new Date().toLocaleTimeString()}` }, ...l].slice(0, 8)); } catch { setLogs((l) => [{ level: "warn", text: "Cache local cheio: projeto mantido em memória" }, ...l].slice(0, 8)); } }, 450); return () => clearTimeout(id); }, [project]);
+  useEffect(() => { const id = window.setTimeout(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(project)); setLogs((l) => [{ level: "ok" as const, text: `Autosave ${new Date().toLocaleTimeString()}` }, ...l].slice(0, 8)); } catch { setLogs((l) => [{ level: "warn" as const, text: "Cache local cheio: projeto mantido em memória" }, ...l].slice(0, 8)); } }, 450); return () => clearTimeout(id); }, [project]);
   useEffect(() => { ASSET_LIBRARY.slice(0, 10).forEach((a) => modelElement(a.model, a.render)); }, []);
 
   const patch = useCallback((patchData: Partial<CreatorProject>, save = true) => dispatch({ type: "patch", patch: patchData, save }), []);
-  const selectGenre = (genre: Genre) => { dispatch({ type: "replace", project: defaultProject(genre) }); setMode("edit"); setLogs((l) => [{ level: "ok", text: `${GENRE_TEMPLATES[genre].label}: módulos, física e câmera aplicados` }, ...l].slice(0, 8)); SFX.click(); };
+  const selectGenre = (genre: Genre) => { dispatch({ type: "replace", project: defaultProject(genre) }); setMode("edit"); setLogs((l) => [{ level: "ok" as const, text: `${GENRE_TEMPLATES[genre].label}: módulos, física e câmera aplicados` }, ...l].slice(0, 8)); SFX.click(); };
   const selectedAsset = ASSET_LIBRARY.find((a) => a.id === project.selectedAssetId) ?? ASSET_LIBRARY[0];
   const filteredAssets = ASSET_LIBRARY.filter((a) => a.genres.includes(project.genre) || project.genre === "sandbox");
   const placeAt = (lane: -1 | 0 | 1, row: number) => {
@@ -223,7 +224,7 @@ export default function Creator({ onExit }: { onExit: () => void }) {
     patch({ placed: [...project.placed.filter((p) => !(p.lane === lane && Math.abs(p.z - z) < 1.8)), next] }); SFX.place();
   };
   const resetProject = () => { dispatch({ type: "replace", project: defaultProject(project.genre) }); SFX.click(); };
-  const recover = () => { setStatus("recovering"); window.setTimeout(() => setStatus("ready"), 500); setLogs((l) => [{ level: "warn", text: "Auto recovery: viewport reiniciada com projeto salvo" }, ...l].slice(0, 8)); };
+  const recover = () => { setStatus("recovering"); window.setTimeout(() => setStatus("ready"), 500); setLogs((l) => [{ level: "warn" as const, text: "Auto recovery: viewport reiniciada com projeto salvo" }, ...l].slice(0, 8)); };
 
   useEffect(() => {
     if (mode !== "play") { if (rafId.current) cancelAnimationFrame(rafId.current); scrollRef.current = 0; setScroll(0); setScore(0); setLives(3); jumpVel.current = 0; playerYRef.current = 0; setPlayerY(0); return; }
@@ -233,7 +234,7 @@ export default function Creator({ onExit }: { onExit: () => void }) {
       project.placed.forEach((p) => { const worldZ = p.z + scrollRef.current; if (Math.abs(worldZ - PLAYER_Z) < 1 && (project.genre === "platform" ? playerYRef.current < 0.9 : p.lane === playerLane) && now - hitCool.current > 850) { hitCool.current = now; SFX.hit(); setLives((l) => Math.max(0, l - 1)); } }); rafId.current = requestAnimationFrame(tick); };
     rafId.current = requestAnimationFrame(tick); return () => { if (rafId.current) cancelAnimationFrame(rafId.current); };
   }, [mode, project.genre, project.speedTier, project.placed, playerLane]);
-  useEffect(() => { if (mode === "play" && lives <= 0) { setMode("edit"); setLogs((l) => [{ level: "warn", text: "Teste encerrado: voltando ao editor sem perder alterações" }, ...l].slice(0, 8)); } }, [lives, mode]);
+  useEffect(() => { if (mode === "play" && lives <= 0) { setMode("edit"); setLogs((l) => [{ level: "warn" as const, text: "Teste encerrado: voltando ao editor sem perder alterações" }, ...l].slice(0, 8)); } }, [lives, mode]);
   useEffect(() => { const onKey = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") dispatch({ type: "undo" }); if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") dispatch({ type: "redo" }); if (mode !== "play") return; if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") setPlayerLane((l) => Math.max(-1, l - 1)); if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") setPlayerLane((l) => Math.min(1, l + 1)); if ((e.key === " " || e.key === "ArrowUp") && playerYRef.current === 0) { jumpVel.current = 8; SFX.jump(); } }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [mode]);
 
   return <div className="relative h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100"><CreatorErrorBoundary onRecover={recover}><Suspense fallback={<ProfessionalLoader />}><LazyCanvas project={project} mode={mode} playerLane={playerLane} playerY={playerY} scroll={scroll} /></Suspense></CreatorErrorBoundary>{status !== "ready" && <ProfessionalLoader label={status === "recovering" ? "Restaurando viewport e cache" : "Pré-carregando assets, áudio e editor"} />}{mode === "template" ? <TemplateSelector onExit={onExit} onSelect={selectGenre} restored={project.placed.length > 0} onResume={() => { setMode("edit"); SFX.click(); }} /> : <EditorUI project={project} filteredAssets={filteredAssets} selectedAsset={selectedAsset} mode={mode} music={music} score={score} lives={lives} logs={logs} canUndo={history.past.length > 0} canRedo={history.future.length > 0} onExit={onExit} onBackTemplates={() => setMode("template")} onPatch={patch} onUndo={() => dispatch({ type: "undo" })} onRedo={() => dispatch({ type: "redo" })} onReset={resetProject} onSetMode={setMode} onSetMusic={setMusic} onPlace={placeAt} onRecover={recover} onMove={(dir) => { setPlayerLane((l) => Math.max(-1, Math.min(1, l + dir))); SFX.click(); }} onJump={() => { if (playerYRef.current === 0) { jumpVel.current = 8; SFX.jump(); } }} />}</div>;
