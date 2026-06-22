@@ -3,20 +3,23 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let musicNodes: { osc: OscillatorNode; gain: GainNode; lfo?: OscillatorNode; interval?: number } | null = null;
 
-function ensure(): AudioContext {
+function ensure(): AudioContext | null {
+  if (typeof window === "undefined") return null;
   if (!ctx) {
-    const AC = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return null;
     ctx = new AC();
     master = ctx.createGain();
     master.gain.value = 0.4;
     master.connect(ctx.destination);
   }
-  if (ctx.state === "suspended") ctx.resume();
+  if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
   return ctx;
 }
 
 function envBeep(freqStart: number, freqEnd: number, dur: number, type: OscillatorType = "sine", vol = 0.3) {
   const c = ensure();
+  if (!c || !master) return;
   const o = c.createOscillator();
   const g = c.createGain();
   o.type = type;
@@ -36,6 +39,7 @@ export const SFX = {
   },
   hit() {
     const c = ensure();
+    if (!c || !master) return;
     const buf = c.createBuffer(1, c.sampleRate * 0.4, c.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
@@ -64,6 +68,7 @@ export const SFX = {
 export function startMusic() {
   if (musicNodes) return;
   const c = ensure();
+  if (!c || !master) return;
   const g = c.createGain();
   g.gain.value = 0.12;
   g.connect(master!);
