@@ -11,7 +11,22 @@ export type ModelType =
   | "orc"
   | "cow"
   | "horse"
-  | "dragon";
+  | "dragon"
+  | "car"
+  | "warrior"
+  | "mage"
+  | "robot"
+  | "sign"
+  | "cone"
+  | "wall"
+  | "grandstand"
+  | "portal"
+  | "water"
+  | "fire"
+  | "grass"
+  | "ramp"
+  | "bridge"
+  | "tunnel";
 
 export interface RenderComponent {
   color: string;
