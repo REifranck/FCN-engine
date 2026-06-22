@@ -46,8 +46,6 @@ export default function Engine() {
   const hitCooldown = useRef(0);
   const config = getConfig(state.configId);
 
-  if (showCreator) return <Creator onExit={() => setShowCreator(false)} />;
-
   // Clear entities on (re)start
   useEffect(() => {
     if (state.status === "playing") entitiesRef.current = [];
@@ -73,6 +71,8 @@ export default function Engine() {
   const handleScore = useCallback(() => dispatch({ type: "score" }), []);
 
   const lane = (dir: -1 | 1) => () => dispatch({ type: "lane", dir });
+
+  if (showCreator) return <Creator onExit={() => setShowCreator(false)} />;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black font-mono text-cyan-300">
