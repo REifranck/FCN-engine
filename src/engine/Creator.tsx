@@ -252,6 +252,10 @@ export default function Creator({ onExit }: { onExit: () => void }) {
   const [scroll, setScroll] = useState(0);
   const rafId = useRef<number | null>(null);
   const hitCool = useRef(0);
+  const [cameraView, setCameraView] = useState<CameraView>(defaultCameraFor(project.genre));
+  const yawRef = useRef(0);
+  const pitchRef = useRef(0.18);
+  useEffect(() => { setCameraView(defaultCameraFor(project.genre)); yawRef.current = 0; pitchRef.current = 0.18; }, [project.genre]);
 
   useEffect(() => { const id = window.setTimeout(() => setStatus("ready"), 650); return () => window.clearTimeout(id); }, []);
   useEffect(() => { if (music) startMusic(); else stopMusic(); return () => stopMusic(); }, [music]);
