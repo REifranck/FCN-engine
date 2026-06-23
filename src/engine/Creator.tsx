@@ -148,41 +148,90 @@ class CreatorErrorBoundary extends Component<{ children: ReactNode; onRecover: (
   }
 }
 
-function CreatorCanvas({ project, mode, playerLane, playerY, scroll }: { project: CreatorProject; mode: Mode; playerLane: number; playerY: number; scroll: number }) {
-  return <Canvas shadows dpr={[1, 1.2]} frameloop="always" gl={{ antialias: false, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping }} camera={{ position: [0, 18, 13], fov: 55 }}><Scene project={project} mode={mode} playerLane={playerLane} playerY={playerY} scroll={scroll} /></Canvas>;
+function CreatorCanvas({ project, mode, playerLane, playerY, scroll, cameraView, yawRef, pitchRef }: { project: CreatorProject; mode: Mode; playerLane: number; playerY: number; scroll: number; cameraView: CameraView; yawRef: React.MutableRefObject<number>; pitchRef: React.MutableRefObject<number> }) {
+  return <Canvas shadows dpr={[1, 1.5]} frameloop="always" gl={{ antialias: true, powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }} camera={{ position: [0, 18, 13], fov: 60 }}><Scene project={project} mode={mode} playerLane={playerLane} playerY={playerY} scroll={scroll} cameraView={cameraView} yawRef={yawRef} pitchRef={pitchRef} /></Canvas>;
 }
 
-function Scene({ project, mode, playerLane, playerY, scroll }: { project: CreatorProject; mode: Mode; playerLane: number; playerY: number; scroll: number }) {
+function Scene({ project, mode, playerLane, playerY, scroll, cameraView, yawRef, pitchRef }: { project: CreatorProject; mode: Mode; playerLane: number; playerY: number; scroll: number; cameraView: CameraView; yawRef: React.MutableRefObject<number>; pitchRef: React.MutableRefObject<number> }) {
   const theme = THEMES[project.theme];
-  const template = GENRE_TEMPLATES[project.genre];
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const playerRef = useRef<THREE.Group>(null);
   const targetLaneX = LANE_X[playerLane + 1];
-  const trackTiles = useMemo(() => Array.from({ length: 12 }, (_, i) => i), []);
+  const trackTiles = useMemo(() => Array.from({ length: 14 }, (_, i) => i), []);
+
+  // Pointer drag → orbit yaw/pitch (mouse + touch)
+  useEffect(() => {
+    const el = gl.domElement;
+    let dragging = false; let lx = 0; let ly = 0;
+    const down = (e: PointerEvent) => { if (mode !== "play") return; dragging = true; lx = e.clientX; ly = e.clientY; el.setPointerCapture(e.pointerId); };
+    const move = (e: PointerEvent) => { if (!dragging) return; const dx = e.clientX - lx; const dy = e.clientY - ly; lx = e.clientX; ly = e.clientY; yawRef.current -= dx * 0.005; pitchRef.current = Math.max(-0.4, Math.min(1.0, pitchRef.current + dy * 0.004)); };
+    const up = (e: PointerEvent) => { dragging = false; try { el.releasePointerCapture(e.pointerId); } catch { /* noop */ } };
+    el.addEventListener("pointerdown", down); el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    return () => { el.removeEventListener("pointerdown", down); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
+  }, [gl, mode, yawRef, pitchRef]);
+
+  const tmpTarget = useMemo(() => new THREE.Vector3(), []);
+  const tmpPos = useMemo(() => new THREE.Vector3(), []);
+
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05);
-    if (mode === "play") {
-      const side = template.camera === "side" || template.camera === "arena";
-      camera.position.x += ((side ? 7 : targetLaneX * 0.45) - camera.position.x) * Math.min(1, dt * 5);
-      camera.position.y += ((side ? 3.2 : 4.7) - camera.position.y) * Math.min(1, dt * 4);
-      camera.position.z += ((side ? PLAYER_Z : PLAYER_Z + 6.5) - camera.position.z) * Math.min(1, dt * 4);
-      camera.lookAt(targetLaneX * 0.25, 1.1, 0);
-    } else {
-      camera.position.x += (0 - camera.position.x) * Math.min(1, dt * 4);
-      camera.position.y += (18 - camera.position.y) * Math.min(1, dt * 3);
-      camera.position.z += (13 - camera.position.z) * Math.min(1, dt * 3);
-      camera.lookAt(0, 0, -12);
-    }
     if (playerRef.current) {
       playerRef.current.position.x += (targetLaneX - playerRef.current.position.x) * Math.min(1, dt * 12);
       playerRef.current.position.y = 0.55 + playerY + Math.sin(performance.now() * 0.006) * 0.04;
+      playerRef.current.rotation.y += (((targetLaneX - playerRef.current.position.x) * -0.4) - playerRef.current.rotation.y) * Math.min(1, dt * 8);
+    }
+    if (mode === "play") {
+      const px = playerRef.current?.position.x ?? targetLaneX;
+      const py = playerRef.current?.position.y ?? 0.6;
+      const pz = PLAYER_Z;
+      const yaw = yawRef.current; const pitch = pitchRef.current;
+      // distance & height by camera view
+      const view = cameraView;
+      const dist = view === "fps" ? 0.001 : view === "tps-close" ? 4.5 : view === "tps" ? 7 : view === "side" ? 9 : view === "top" ? 11 : 8;
+      const height = view === "fps" ? 1.55 : view === "tps-close" ? 2.4 : view === "tps" ? 3.2 : view === "side" ? 3 : view === "top" ? 10 : 3.4;
+      if (view === "side") {
+        tmpPos.set(px + 9, 3 + py, pz);
+        tmpTarget.set(px, 1 + py, pz - 1);
+      } else if (view === "top") {
+        tmpPos.set(px, 14, pz + 1);
+        tmpTarget.set(px, 0, pz - 4);
+      } else {
+        // orbit / tps / fps — yaw rotates behind player, pitch tilts
+        const ox = Math.sin(yaw) * Math.cos(pitch) * dist;
+        const oz = Math.cos(yaw) * Math.cos(pitch) * dist;
+        const oy = Math.sin(pitch) * dist + height;
+        tmpPos.set(px + ox, py + oy, pz + oz);
+        if (view === "fps") tmpTarget.set(px - Math.sin(yaw) * 6, py + 1.4 - Math.sin(pitch) * 4, pz - Math.cos(yaw) * 6);
+        else tmpTarget.set(px, py + 0.9, pz - 0.5);
+      }
+      const k = view === "fps" ? 1 : Math.min(1, dt * 7);
+      camera.position.lerp(tmpPos, k);
+      camera.lookAt(tmpTarget);
+    } else {
+      // editor: gentle isometric with optional yaw drag
+      const yaw = yawRef.current * 0.4;
+      tmpPos.set(Math.sin(yaw) * 14, 18, 13 + Math.cos(yaw) * 4);
+      camera.position.lerp(tmpPos, Math.min(1, dt * 3));
+      camera.lookAt(0, 0, -12);
     }
   });
   const sky = project.weather === "night" ? "#050816" : project.weather === "fog" ? "#283044" : theme.sky;
   const fog = project.weather === "clear" ? theme.fog : project.weather === "rain" || project.weather === "storm" ? "#172033" : "#94a3b8";
   const visiblePlaced = project.placed.filter((p) => project.layers[p.layer] !== false);
-  return <><color attach="background" args={[sky]} /><fog attach="fog" args={[fog, project.weather === "fog" ? 5 : 14, project.weather === "fog" ? 44 : 75]} /><ambientLight intensity={project.weather === "night" ? 0.22 : theme.ambient} /><directionalLight position={[8, 14, 6]} intensity={project.weather === "night" ? 0.55 : 1.25} color={theme.sun} castShadow shadow-mapSize-width={512} shadow-mapSize-height={512} /><hemisphereLight args={[sky, theme.ground, 0.35]} /><mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, -8]} receiveShadow><planeGeometry args={[220, 220]} /><meshStandardMaterial color={theme.ground} roughness={1} /></mesh>{trackTiles.map((i) => <group key={i} position={[0, 0, PLAYER_Z - i * 8 + (mode === "play" ? scroll % 8 : 0)]}>{modelElement(project.genre === "race" || project.selectedBrush === "track" ? "track" : "grass", project.genre === "race" ? theme.track : baseRender("#1f6f42"))}</group>)}{project.terrain.map((c) => <mesh key={`${c.row}-${c.lane}`} position={[LANE_X[c.lane + 1], 0.045 + c.height * 0.08, PLAYER_Z - 6 - c.row * 4]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[2.15, 3.65]} /><meshStandardMaterial color={brushColor(c.brush)} roughness={0.86} /></mesh>)}{visiblePlaced.map((p) => <group key={p.id} position={[LANE_X[p.lane + 1], 0, p.z + (mode === "play" ? scroll : 0)]}>{modelElement(p.model, p.render)}</group>)}<group ref={playerRef} position={[targetLaneX, 0.5, PLAYER_Z]}>{modelElement(project.genre === "race" ? "car" : project.genre === "futuristic" || project.genre === "shooter" ? "robot" : "warrior", project.genre === "race" ? baseRender("#111827", "#22d3ee", 2.5, 0.65, 0.25) : baseRender("#d6d3d1", "#facc15", 1.3, 0.75, 0.3))}<pointLight color="#67e8f9" intensity={3.5} distance={7} /></group>{(project.weather === "rain" || project.weather === "storm") && Array.from({ length: 80 }).map((_, i) => <mesh key={i} position={[(i % 17 - 8) * 0.9, 3 + (i % 9) * 0.45, -34 + (i % 23) * 2]}><boxGeometry args={[0.015, 0.65, 0.015]} /><meshBasicMaterial color="#93c5fd" transparent opacity={0.45} /></mesh>)}{project.weather === "storm" && <pointLight position={[0, 8, -12]} color="#bfdbfe" intensity={8} distance={45} />}{mode !== "play" && Array.from({ length: 12 }).map((_, row) => ([-1, 0, 1] as const).map((lane) => <mesh key={`${row}-${lane}`} position={[LANE_X[lane + 1], 0.07, PLAYER_Z - 6 - row * 4]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[2.15, 3.65]} /><meshBasicMaterial color="#e0f2fe" transparent opacity={0.055} /></mesh>))}</>;
+  const isCyber = project.theme === "cyber" || project.weather === "night";
+  return <><color attach="background" args={[sky]} /><fog attach="fog" args={[fog, project.weather === "fog" ? 5 : 18, project.weather === "fog" ? 44 : 90]} /><ambientLight intensity={project.weather === "night" ? 0.22 : theme.ambient * 0.85} /><directionalLight position={[8, 14, 6]} intensity={project.weather === "night" ? 0.55 : 1.3} color={theme.sun} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} shadow-camera-left={-20} shadow-camera-right={20} shadow-camera-top={20} shadow-camera-bottom={-20} /><directionalLight position={[-6, 6, -8]} intensity={isCyber ? 0.9 : 0.35} color={isCyber ? "#ff3df0" : "#9bb7ff"} /><hemisphereLight args={[sky, theme.ground, 0.45]} /><mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, -8]} receiveShadow><planeGeometry args={[260, 260]} /><meshStandardMaterial color={theme.ground} roughness={1} metalness={isCyber ? 0.25 : 0} /></mesh>{trackTiles.map((i) => <group key={i} position={[0, 0, PLAYER_Z - i * 8 + (mode === "play" ? scroll % 8 : 0)]}>{modelElement(project.genre === "race" || project.selectedBrush === "track" ? "track" : "grass", project.genre === "race" ? theme.track : baseRender("#1f6f42"))}</group>)}{project.terrain.map((c) => <mesh key={`${c.row}-${c.lane}`} position={[LANE_X[c.lane + 1], 0.045 + c.height * 0.08, PLAYER_Z - 6 - c.row * 4]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[2.15, 3.65]} /><meshStandardMaterial color={brushColor(c.brush)} roughness={0.86} /></mesh>)}{visiblePlaced.map((p) => <group key={p.id} position={[LANE_X[p.lane + 1], 0, p.z + (mode === "play" ? scroll : 0)]}>{modelElement(p.model, p.render)}</group>)}<group ref={playerRef} position={[targetLaneX, 0.5, PLAYER_Z]} visible={cameraView !== "fps"}>{modelElement(project.genre === "race" ? "car" : project.genre === "futuristic" || project.genre === "shooter" ? "robot" : "warrior", project.genre === "race" ? baseRender("#111827", "#22d3ee", 2.5, 0.65, 0.25) : baseRender("#d6d3d1", "#facc15", 1.3, 0.75, 0.3))}<pointLight color="#67e8f9" intensity={3} distance={6} /></group>{(project.weather === "rain" || project.weather === "storm") && Array.from({ length: 120 }).map((_, i) => <mesh key={i} position={[(i % 19 - 9) * 0.9, 3 + (i % 9) * 0.45, -34 + (i % 23) * 2]}><boxGeometry args={[0.015, 0.7, 0.015]} /><meshBasicMaterial color="#93c5fd" transparent opacity={0.5} /></mesh>)}{project.weather === "storm" && <pointLight position={[0, 8, -12]} color="#bfdbfe" intensity={8} distance={45} />}{mode !== "play" && Array.from({ length: 12 }).map((_, row) => ([-1, 0, 1] as const).map((lane) => <mesh key={`${row}-${lane}`} position={[LANE_X[lane + 1], 0.07, PLAYER_Z - 6 - row * 4]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[2.15, 3.65]} /><meshBasicMaterial color="#e0f2fe" transparent opacity={0.055} /></mesh>))}</>;
 }
+
+type CameraView = "tps" | "tps-close" | "fps" | "side" | "top" | "orbit";
+const CAMERA_VIEWS: { id: CameraView; label: string; emoji: string }[] = [
+  { id: "tps", label: "3ª Pessoa", emoji: "🎮" },
+  { id: "tps-close", label: "Over-Shoulder", emoji: "🎯" },
+  { id: "fps", label: "FPS", emoji: "🔫" },
+  { id: "side", label: "Side", emoji: "🕹️" },
+  { id: "top", label: "Top-Down", emoji: "🗺️" },
+  { id: "orbit", label: "Cinematográfica", emoji: "🎬" },
+];
+function defaultCameraFor(g: Genre): CameraView { return g === "shooter" || g === "futuristic" ? "fps" : g === "race" ? "tps-close" : g === "fight" ? "orbit" : g === "platform" ? "side" : g === "sandbox" ? "top" : "tps"; }
 
 function brushColor(brush: TerrainBrush) { return ({ track: "#30343b", height: "#8b7355", smooth: "#55744a", water: "#0ea5e9", sand: "#d6b46a", snow: "#e0f2fe", dirt: "#765238", mountain: "#6b7280" } as Record<TerrainBrush, string>)[brush]; }
 
